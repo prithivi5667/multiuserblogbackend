@@ -1,5 +1,4 @@
-const express = require('express');
-const router = express.Router();
+const express = require("express");
 const {
   signup,
   signin,
@@ -9,23 +8,36 @@ const {
   resetPassword,
   preSignup,
   googleLogin,
-} = require('../controllers/auth');
+} = require("../controllers/auth");
+const router = express.Router();
 
-// validators
+// Validators
+const { runValidation } = require("../validators");
 const {
   userSignupValidator,
   userSigninValidator,
   forgotPasswordValidator,
   resetPasswordValidator,
-} = require('../validators/auth');
-const { runValidation } = require('../validators');
-const { response } = require('express');
+} = require("../validators/auth");
 
-router.post('/pre-signup', userSignupValidator, runValidation, preSignup);
-router.post('/signup', signup);
-router.post('/signin', userSigninValidator, runValidation, signin);
-router.get('/signout', signout);
-router.put('/forgot-password', forgotPasswordValidator, runValidation, forgotPassword);
-router.put('/reset-password', resetPasswordValidator, runValidation, resetPassword);
-router.post('/google-login', googleLogin);
+router.post("/pre-signup", userSignupValidator, runValidation, preSignup);
+router.post("/signup", signup);
+router.post("/signin", userSigninValidator, runValidation, signin);
+router.get("/signout", signout);
+router.put(
+  "/forgot-password",
+  forgotPasswordValidator,
+  runValidation,
+  forgotPassword
+);
+router.put(
+  "/reset-password",
+  resetPasswordValidator,
+  runValidation,
+  resetPassword
+);
+
+// Google-Login
+router.post("/google-login", googleLogin);
+
 module.exports = router;

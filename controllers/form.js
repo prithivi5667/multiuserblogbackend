@@ -1,59 +1,86 @@
-const sgMail = require('@sendgrid/mail');
+const sgMail = require("@sendgrid/mail"); // SENDGRID_API_KEY
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 exports.contactForm = (req, res) => {
   const { email, name, message } = req.body;
+  // console.log(req.body);
+
   const emailData = {
-    to: 'luiscusihuaman88@gmail.com',
-    from: email,
-    subject: `Contact form - ${process.env.APP_NAME}`,
-    text: `
-            Email received from contact from
-            Sender name: ${name}
-            Sender email: ${email}
-            Sender message: ${message}
-          `,
+    to: process.env.EMAIL_TO,
+    from: email, // Enter email taht was verified from sendgrid
+    subject: `${process.env.APP_NAME}`,
+    text: `Email received from contact from \n Sender name: ${name} \n Sender email: ${email} \n Sender message: ${message}`,
     html: `
             <h4>Email received from contact form:</h4>
             <p>Sender name: ${name}</p>
             <p>Sender email: ${email}</p>
             <p>Sender message: ${message}</p>
-            <hr/>
+            <hr />
             <p>This email may contain sensetive information</p>
-            <p>https://seoblog.luistest.xyz</p>
-          `,
+            <p>https://seoblog.com</p>
+        `,
   };
+
   sgMail
     .send(emailData)
-    .then((data) => res.json({ data, success: true }))
-    .catch((err) => console.log(err));
+    .then((sent) => {
+      return res.json({
+        success: true,
+      });
+    })
+    .catch((error) => {
+      console.error(error);
+      if (error.response) {
+        // Extract error msg
+        const { message, code, response } = error;
+
+        // Extract response msg
+        const { headers, body } = response;
+
+        console.error(body);
+      }
+    });
 };
 
 exports.contactBlogAuthorForm = (req, res) => {
   const { authorEmail, email, name, message } = req.body;
-  console.log(authorEmail);
+  // console.log(req.body);
+
+  let maillist = [authorEmail, process.env.EMAIL_TO];
+
   const emailData = {
-    to: authorEmail || 'lcusihuaman@fi.uba.ar',
+    to: maillist,
     from: email,
-    subject: `Someone message you from - ${process.env.APP_NAME}`,
-    text: `
-            Email received from contact from
-            Sender name: ${name}
-            Sender email: ${email}
-            Sender message: ${message}
-          `,
+    subject: `Someone messaged you from ${process.env.APP_NAME}`,
+    text: `Email received from contact from \n Sender name: ${name} \n Sender email: ${email} \n Sender message: ${message}`,
     html: `
-            <h4>Message recived from:</h4>
-            <p>Name: ${name}</p>
+            <h4>Message received from:</h4>
+            <p>name: ${name}</p>
             <p>Email: ${email}</p>
             <p>Message: ${message}</p>
-            <hr/>
+            <hr />
             <p>This email may contain sensetive information</p>
-            <p>https://seoblog.luistest.xyz</p>
-          `,
+            <p>https://seoblog.com</p>
+        `,
   };
+
   sgMail
     .send(emailData)
-    .then((data) => res.json({ data, success: true }))
-    .catch((err) => console.log(err));
+    .then((sent) => {
+      return res.json({
+        success: true,
+      });
+    })
+    .catch((error) => {
+      console.error(error);
+      if (error.response) {
+        // Extract error msg
+        const { message, code, response } = error;
+
+        // Extract response msg
+        const { headers, body } = response;
+
+        console.error(body);
+      }
+    });
 };

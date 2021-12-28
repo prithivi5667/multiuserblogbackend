@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 const { ObjectId } = mongoose.Schema;
 
 const blogSchema = new mongoose.Schema(
@@ -35,14 +35,15 @@ const blogSchema = new mongoose.Schema(
       data: Buffer,
       contentType: String,
     },
-    categories: [{ type: ObjectId, ref: 'Category', required: true }],
-    tags: [{ type: ObjectId, ref: 'Tag', required: true }],
+    categories: [{ type: ObjectId, ref: "Category", required: true }],
+    tags: [{ type: ObjectId, ref: "Tag", required: true }],
+    favoritesCount: {type: Number, default: 0},
     postedBy: {
       type: ObjectId,
-      ref: 'User',
+      ref: "User",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
-module.exports = mongoose.model('Blog', blogSchema);
+module.exports = mongoose.model("Blog", blogSchema);

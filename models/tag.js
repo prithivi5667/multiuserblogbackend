@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const tagSchema = new mongoose.Schema(
   {
@@ -14,7 +14,7 @@ const tagSchema = new mongoose.Schema(
       index: true,
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 module.exports = mongoose.model('Tag', tagSchema);

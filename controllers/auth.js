@@ -1,238 +1,374 @@
-const User = require('../models/user');
-const shortId = require('shortid');
-const jwt = require('jsonwebtoken');
-const expressJwt = require('express-jwt');
-const { response } = require('express');
-const Blog = require('../models/blog');
-const { OAuth2Client } = require('google-auth-library');
-const sgMail = require('@sendgrid/mail');
+const User = require("../models/user");
+const Blog = require("../models/blog");
+const shortId = require("shortid");
+const jwt = require("jsonwebtoken");
+const expressJwt = require("express-jwt");
+const blog = require("../models/blog");
+const { errorHandler } = require("../helpers/dbErrorHandler");
+
+// SendGrid
+const sgMail = require("@sendgrid/mail"); // SENDGRID_API_KEY
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-const _ = require('lodash');
-const shortid = require('shortid');
+const _ = require("lodash");
 
-exports.preSignup = async (req, res, next) => {
+// Google_auth_library
+const { OAuth2Client } = require("google-auth-library");
+const { response } = require("express");
+
+exports.preSignup = (req, res) => {
   const { name, email, password } = req.body;
-
-  try {
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (user) {
-      error = new Error('Email is taken');
-      error.statusCode = 400;
-      throw error;
+  User.findOne({ email: email.toLowerCase() }, (err, user) => {
+    if (err) {
+      return res.status(400).json({
+        error: "Email is already taken",
+      });
     }
-    const token = jwt.sign({ name, email, password }, process.env.JWT_SECRET_ACCOUNT_ACTIVATION, {
-      expiresIn: '10m',
-    });
+    // Generate a JWT token and send to client
+    const token = jwt.sign(
+      { name, email, password },
+      process.env.JWT_ACCOUNT_ACTIVATION,
+      {
+        expiresIn: "10m",
+      }
+    );
+
+    // email
     const emailData = {
-      from: 'prithivi5667@gmail.com',
-      to: email,
-      subject: `Account activation link`,
+      from: process.env.EMAIL_FROM,
+      to: email, // Enter email taht was verified from sendgrid
+      subject: `Account Activation Link`,
       html: `
-              <h4>Please use the following link to activate your account:</h4>
+              <p>Please use the following link to activate your Account:</p>
               <p>${process.env.CLIENT_URL}/auth/account/activate/${token}</p>
-              <hr/>
+              <hr />
               <p>This email may contain sensetive information</p>
-              <p>https://seoblog.luistest.xyz</p>
-            `,
+              <p>https://seoblog.com</p>
+          `,
     };
-    await sgMail.send(emailData);
-    return res.json({
-      message: `Email has been sent to ${email}. Follow the instructions to activate your account`,
+
+    sgMail.send(emailData).then((sent) => {
+      return res.json({
+        message: `Email has been sent to ${email}. Follow the instructions to activate your account.`,
+      });
     });
-  } catch (error) {
-    return res.status(error.statusCode || 500).json({ error: error.message });
-  }
+  });
 };
 
-exports.signup = async (req, res, next) => {
-  const token = req.body.token;
-  if (!token) return res.json({ error: 'Something went wrong. Try again' });
+// exports.signup = (req, res) => {
+//   User.findOne({ email: req.body.email }).exec((err, user) => {
+//     if (user) {
+//       return res.status(400).json({
+//         error: "Email is taken.",
+//       });
+//     }
 
-  jwt.verify(token, process.env.JWT_SECRET_ACCOUNT_ACTIVATION, (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ error: 'Expired link. Signup again' });
-    }
-    const { name, email, password } = jwt.decode(token);
-    let username = shortId.generate();
-    let profile = `${process.env.CLIENT_URL}/profile/${username}`;
-    const user = new User({ name, email, password, profile, username });
-    user
-      .save()
-      .then(() => res.json({ message: 'Signup success!' }))
-      .catch((err) => res.status(401).json({ error: err }));
-  });
+//     const { name, email, password } = req.body;
+//     let username = shortId.generate();
+//     let profile = `${process.env.CLIENT_URL}/profile/${username}`;
+
+//     let newUser = new User({ name, email, password, profile, username });
+//     newUser.save((err, success) => {
+//       if (err) {
+//         return res.status(400).json({
+//           error: err,
+//         });
+//       }
+//       // res.json({
+//       //     user: success
+//       // })
+//       res.json({
+//         message: "Signup success! Please signin.",
+//       });
+//     });
+//   });
+// };
+
+exports.signup = (req, res) => {
+  const token = req.body.token;
+  if (token) {
+    jwt.verify(
+      token,
+      process.env.JWT_ACCOUNT_ACTIVATION,
+      function (err, decoded) {
+        if (err) {
+          return res.status(401).json({
+            error: "Expired link. SignUp again.",
+          });
+        }
+        const { name, email, password } = jwt.decode(token);
+        let username = shortId.generate();
+        let profile = `${process.env.CLIENT_URL}/profile/${username}`;
+
+        const user = new User({ name, email, password, profile, username });
+
+        user.save((err, user) => {
+          if (err) {
+            return res.status(401).json({
+              error: errorHandler(err),
+            });
+          }
+          return res.json({
+            message: "SignUp Successs! Please SignIn",
+          });
+        });
+      }
+    );
+  } else {
+    return res.json({
+      message:
+        "Something went wrong. Try again & if the problem persists contact admin",
+    });
+  }
 };
 
 exports.signin = (req, res) => {
   const { email, password } = req.body;
-  // check if user exists
+
+  // Check if user exists
   User.findOne({ email }).exec((err, user) => {
     if (err || !user) {
       return res.status(400).json({
-        error: 'User with that email does not exist. Please signup',
+        error: "User with that email does not exist. Please signup.",
       });
     }
-    // authenticate
+
+    // Authenticate
     if (!user.authenticate(password)) {
-      return res.status(400).json({ error: 'Email and password do not match' });
+      return res.status(400).json({
+        error: "Email and Password do not match.",
+      });
     }
-    // generate a jsonwebtoken and send this to client
+
+    // Generate a JWT token and send to client
     const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: '1d',
+      expiresIn: "1d",
     });
-    res.cookie('token', token, { expiresIn: '1d' });
+
+    res.cookie("token", token, { expiresIn: "1d" });
+
     const { _id, username, name, email, role } = user;
-    return res.json({ token, user: { _id, username, name, email, role } });
+    return res.json({
+      token,
+      user: { _id, username, name, email, role },
+    });
   });
 };
 
-exports.signout = (req, res = response) => {
-  res.clearCookie('token');
-  res.json({ message: 'Signout success' });
+exports.signout = (req, res) => {
+  res.clearCookie("token");
+  res.json({
+    message: "Signout successful.",
+  });
 };
 
-// exports.requireSignin = expressJwt({
-//   secret: process.env.JWT_SECRET,
-//   algorithms: ['HS256'],
-// });
+// !!!-----Will be used as middleware for protected routes-----!!!
 exports.requireSignin = expressJwt({
   secret: process.env.JWT_SECRET,
-  algorithms: ["HS256"], // added later
-  userProperty: "auth",
+  algorithms: ["HS256"],
 });
-exports.authMiddleware = async (req, res, next) => {
-  const authUserId = req.user._id;
-  try {
-    const user = await User.findById({ _id: authUserId });
-    if (!user) {
-      return res.status(400).json({ error: 'User not found' });
-    }
-    req.profile = user;
-  } catch (error) {
-    throw new Error(error);
-  }
-  next();
-};
 
-exports.adminMiddleware = (req, res, next) => {
+exports.authMiddleWare = (req, res, next) => {
   const authUserId = req.user._id;
   User.findById({ _id: authUserId }).exec((err, user) => {
     if (err || !user) {
-      return res.status(400).json({ error: 'User not found' });
-    }
-    if (user.role !== 1) {
-      return res.status(400).json({ error: 'Admin resource. Access denied' });
+      return res.status(400).json({
+        error: "User not found",
+      });
     }
     req.profile = user;
     next();
   });
 };
 
-exports.canUpdateDeleteBlog = async (req, res, next) => {
-  const slug = req.params.slug.toLowerCase();
-  try {
-    const blog = await Blog.findOne({ slug });
-    const authorizedUser = blog.postedBy._id.toString() === req.profile._id.toString();
-    if (!authorizedUser) {
-      return res.status(400).json({ error: 'You are not authorized' });
+exports.adminMiddleWare = (req, res, next) => {
+  const adminUserId = req.user._id;
+  User.findById({ _id: adminUserId }).exec((err, user) => {
+    if (err || !user) {
+      return res.status(400).json({
+        error: "User not found",
+      });
     }
+    if (user.role !== 1) {
+      return res.status(400).json({
+        error: "Admin resource. Access denied",
+      });
+    }
+    req.profile = user;
     next();
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
-};
-
-exports.forgotPassword = async (req, res, next) => {
-  const { email } = req.body;
-
-  try {
-    const user = await User.findOne({ email });
-    if (!user) {
-      error = new Error('User with that email does not exist');
-      error.statusCode = 401;
-      throw error;
-    }
-    const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET_RESET_PASSWORD, {
-      expiresIn: '10m',
-    });
-    const emailData = {
-      from: 'noreply@seoblog.luistest.xyz',
-      to: email,
-      subject: `Password reset link`,
-      html: `
-              <h4>Please use the following link to reset your password:</h4>
-              <p>${process.env.CLIENT_URL}/auth/password/reset/${token}</p>
-              <hr/>
-              <p>This email may contain sensetive information</p>
-              <p>https://seoblog.luistest.xyz</p>
-            `,
-    };
-    await user.updateOne({ resetPasswordLink: token });
-    await sgMail.send(emailData);
-    return res.json({
-      message: `Email has been sent to ${email}. Follow the instructions to reset your password. Link expires in 10min`,
-    });
-  } catch (error) {
-    return res.status(error.statusCode || 500).json({ error: error.message });
-  }
-};
-exports.resetPassword = async (req, res, next) => {
-  const { resetPasswordLink, newPassword } = req.body;
-  if (!resetPasswordLink) return;
-  jwt.verify(resetPasswordLink, process.env.JWT_SECRET_RESET_PASSWORD, async (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ error: 'Expired link. Try again' });
-    }
-    try {
-      let user = await User.findOne({ resetPasswordLink });
-      if (!user) {
-        error = new Error('Something went wrong. Try later');
-        error.statusCode = 401;
-        throw error;
-      }
-      const updateFilds = {
-        password: newPassword,
-        resetPasswordLink: '',
-      };
-      user = _.extend(user, updateFilds);
-      await user.save();
-      return res.json({ message: 'Great! Now you can login with your new password' });
-    } catch (error) {
-      return res.status(error.statusCode || 500).json({ error: error.message });
-    }
   });
 };
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-exports.googleLogin = async (req, res, next) => {
-  const { tokenId } = req.body;
-  try {
-    const loginTicket = await client.verifyIdToken({
-      idToken: tokenId,
-      audience: process.env.GOOGLE_CLIENT_ID,
+exports.canUpdateDeleteBlog = (req, res, next) => {
+  const slug = req.params.slug.toLowerCase();
+  Blog.findOne({ slug }).exec((err, data) => {
+    if (err) {
+      return res.status(400).json({
+        error: errorHandler(err),
+      });
+    }
+    let authorizedUser =
+      data.postedBy._id.toString() === req.profile._id.toString();
+    if (!authorizedUser) {
+      return res.status(400).json({
+        error: "You are not authorized",
+      });
+    }
+    next();
+  });
+};
+
+exports.forgotPassword = (req, res) => {
+  const { email } = req.body;
+
+  User.findOne({ email }, (err, user) => {
+    if (err || !user) {
+      return res.status(401).json({
+        error: "User with that email does not exist",
+      });
+    }
+
+    const token = jwt.sign({ _id: user._id }, process.env.JWT_RESET_PASSWORD, {
+      expiresIn: "10min",
     });
-    let { email_verified, name, email, jti } = loginTicket.payload;
-    if (!email_verified) {
-      return res.status(400).json({ error: 'Google login fails' });
-    }
-    const userFound = await User.findOne({ email });
-    if (!userFound) {
-      let { email_verified, name, email, jti } = loginTicket.payload;
-      const username = shortid.generate();
-      const profile = `${process.env.CLIENT_URL}/profile/${username}`;
-      const password = jti;
-      const user = new User({ name, email, profile, username, password });
-      await user.save();
-      const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
-      res.cookie('token', token, { expiresIn: '1d' });
-      const { _id, role } = user;
-      return res.status(201).json({ token, user: { _id, email, name, role, username } });
-    }
-    const token = jwt.sign({ _id: userFound._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    res.cookie('token', token, { expiresIn: '1d' });
-    const { _id, role, username } = userFound;
-    return res.json({ token, user: { _id, email, name, role, username } });
-  } catch (error) {
-    return res.status(error.statusCode || 500).json({ error: error.message });
+
+    // email
+    const emailData = {
+      from: process.env.EMAIL_FROM,
+      to: email, // Enter email taht was verified from sendgrid
+      subject: `Password Reset Link`,
+      html: `
+              <p>Please use the following link to reset the password:</p>
+              <p>${process.env.CLIENT_URL}/auth/password/reset/${token}</p>
+              <hr />
+              <p>This email may contain sensetive information</p>
+              <p>https://seoblog.com</p>
+          `,
+    };
+
+    // populate the db > user > resetPasswordLink
+    return user.updateOne({ resetPasswordLink: token }, (err, success) => {
+      if (err) {
+        return res.json({ error: errorHandler(err) });
+      } else {
+        sgMail
+          .send(emailData)
+          .then((sent) => {
+            return res.json({
+              message: `Email has been sent to ${email}. Follow the instructions to reset your password. Link expires in 10 min`,
+            });
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+    });
+  });
+};
+
+exports.resetPassword = (req, res) => {
+  const { resetPasswordLink, newPassword } = req.body;
+
+  if (resetPasswordLink) {
+    jwt.verify(
+      resetPasswordLink,
+      process.env.JWT_RESET_PASSWORD,
+      function (err, decoded) {
+        if (err) {
+          return res.status(401).json({
+            error: "Expired link. Try again.",
+          });
+        }
+        User.findOne({ resetPasswordLink }, (err, user) => {
+          if (err || !user) {
+            return res.status(401).json({
+              error: "Something went wrong. Try agin later.",
+            });
+          }
+
+          const updatedFields = {
+            password: newPassword,
+            resetPasswordLink: "",
+          };
+
+          user = _.extend(user, updatedFields);
+
+          user.save((err, result) => {
+            if (err) {
+              return res.status(400).json({
+                error: errorHandler(err),
+              });
+            }
+            res.json({
+              message: `Great! now you can login with your new password`,
+            });
+          });
+        });
+      }
+    );
   }
+};
+
+// Google-Signin
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+exports.googleLogin = (req, res) => {
+  const idToken = req.body.tokenId;
+  client
+    .verifyIdToken({ idToken, audience: process.env.GOOGLE_CLIENT_ID })
+    .then((response) => {
+      console.log(response);
+      const { email_verified, name, email, jti } = response.payload;
+      if (email_verified) {
+        User.findOne({ email }).exec((err, user) => {
+          if (user) {
+            // console.log(user)
+            const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
+              expiresIn: "1d",
+            });
+
+            res.cookie("token", token, { expiresIn: "1d" });
+
+            const { _id, email, name, role, username } = user;
+
+            return res.json({
+              token,
+              user: { _id, email, name, role, username },
+            });
+          } else {
+            let username = shortId.generate();
+            let profile = `${process.env.CLIENT_URL}/profile/${username}`;
+            let password = jti;
+            user = new User({ name, email, profile, username, password });
+
+            user.save((err, data) => {
+              if (err) {
+                return res.status(400).json({
+                  error: errorHandler(err),
+                });
+              }
+
+              const token = jwt.sign(
+                { _id: data._id },
+                process.env.JWT_SECRET,
+                {
+                  expiresIn: "1d",
+                }
+              );
+
+              res.cookie("token", token, { expiresIn: "1d" });
+
+              const { _id, email, name, role, username } = data;
+
+              return res.json({
+                token,
+                user: { _id, email, name, role, username },
+              });
+            });
+          }
+        });
+      } else {
+        return res.status(400).json({
+          error: "Google login failed. Try agin",
+        });
+      }
+    });
 };
